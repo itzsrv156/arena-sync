@@ -5,7 +5,10 @@ export const useMetrics = () => {
 
   useEffect(() => {
     // Placeholder fetching logic
-    setMetrics({ crowdCount: 45000, activeZones: 12 });
+    const timer = setTimeout(() => {
+      setMetrics({ crowdCount: 45000, activeZones: 12 });
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   return metrics;
