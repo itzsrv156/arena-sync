@@ -16,18 +16,18 @@ const Sidebar = ({ aiAnalysis, isHovered, setIsHovered }) => {
     <motion.div 
       className="glass-panel" 
       initial={false}
-      animate={{ width: isHovered ? 260 : 85 }}
+      animate={{ width: isHovered ? 260 : 72 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
         height: 'calc(100vh - 2rem)',
         position: 'fixed',
-        left: '1rem',
+        left: '0.5rem',
         top: '1rem',
         display: 'flex',
         flexDirection: 'column',
-        padding: '2rem 1.25rem',
+        padding: '2rem 1rem',
         overflowY: 'auto',
         overflowX: 'hidden',
         zIndex: 100, // Ensure it's above normal content but below modals

@@ -2,12 +2,8 @@ export const runAIAnalysis = (history, currentState) => {
   if (!history || history.length < 2) return { alerts: [], recommendations: [], riskScores: {} };
 
   const lastState = history[history.length - 2];
-  const alertsMap = new Map();
-  const recsMap = new Map();
+  const allAlerts = [];
   const riskScores = {};
-
-  const addAlert = (alert) => alertsMap.set(alert.id, alert);
-  const addRec = (rec) => recsMap.set(rec.id, rec);
 
   // Analyze Gates
   currentState.gates.forEach(gate => {
@@ -22,31 +18,16 @@ export const runAIAnalysis = (history, currentState) => {
     
     if (predictedLoad >= gate.capacityPerMinute && capacityRatio > 0.6 && delta > 0) {
       risk = Math.min(100, risk + 25);
-      addAlert({
-        id: `alert-${gate.id}`,
+      allAlerts.push({
+        id: `gate-${gate.id}`,
         level: 'critical',
         source: gate.name,
-        message: `${gate.name} projected to breach capacity throughput bounds within 4.2 intervals.`,
-        reason: `Δ Vector Velocity accelerating consistently by +${delta.toFixed(1)}/min.`
-      });
-
-      addRec({
-        id: `rec-${gate.id}`,
-        action: `Reroute 15% traffic away from ${gate.name}`,
-        detail: `Issue immediate ingress suppression protocol at localized approach points. Vector shift should offset +${delta.toFixed(1)}Δ saturation trend.`,
-        confidenceScore: 94.2,
-        technicalReasoning: `Historical throughput matrix indicates that maintaining a net-positive Δ of ${delta.toFixed(1)} for spatial node ${gate.id} will result in structural capacity failure within exactly 4.2 simulation vectors. The model strongly advocates a hard re-routing proxy to diffuse absolute pressure by exactly 15%.`
-      });
-    } else if (capacityRatio > 0.85) {
-      addAlert({
-        id: `alert-high-${gate.id}`,
-        level: 'warning',
-        source: gate.name,
-        message: `${gate.name} ingestion ratios exceeding nominal limits.`,
-        reason: `Throughput metric operating at ${(capacityRatio * 100).toFixed(0)}% absolute limit.`
+        cause: `${gate.name} ingress saturation (${(capacityRatio * 100).toFixed(0)}%)`,
+        effect: `Projected structural capacity failure in ${(Math.max(1, (gate.capacityPerMinute - gate.currentLoadPerMinute) / delta)).toFixed(0)} minutes`,
+        recommendation: `Issue immediate suppression protocols locally to limit throughput. Vector 15% traffic to adjacent clear zones.`,
+        urgency: risk
       });
     }
-
     riskScores[gate.id] = parseFloat(Math.min(100, Math.max(0, risk)).toFixed(1));
   });
 
@@ -55,53 +36,48 @@ export const runAIAnalysis = (history, currentState) => {
     const ratio = stand.occupancy / stand.capacity;
     let risk = ratio * 100;
 
-    if (ratio > 0.9) {
-      addAlert({
+    if (ratio > 0.85) {
+      allAlerts.push({
         id: `stand-${stand.id}`,
         level: 'critical',
         source: stand.name,
-        message: `${stand.name} spatial density violating maximum safety tolerance.`,
-        reason: `Quadrature occupancy mapped at ${(ratio * 100).toFixed(1)}%.`
-      });
-      addRec({
-        id: `rec-stand-${stand.id}`,
-        action: `Halt absolute ingress vectors to ${stand.name}`,
-        detail: `Deploy suppression response teams mapping to concourse ingress points immediately.`,
-        confidenceScore: 99.1,
-        technicalReasoning: `Density node ${stand.id} has breached the 90% spatial limitation constraint. Mathematical continuation implies crushing vectors within the pavilion. Suppressing the primary ingress tensor is mathematically guaranteed to prevent overflow.`
+        cause: `${stand.name} density threshold breached (${(ratio * 100).toFixed(0)}%)`,
+        effect: `High probability of queue stagnation bleeding into primary access concourse within 2 simulation intervals.`,
+        recommendation: `Deploy suppression units. Halt absolute ingress vectors to ${stand.name} and clear stairwells.`,
+        urgency: risk + 10 // stands are high priority
       });
     }
     riskScores[stand.id] = parseFloat(Math.min(100, Math.max(0, risk)).toFixed(1));
   });
 
-  // Analyze Food Stalls
+  // Analyze Facilities (Food/Washrooms) causing bottlenecks
   currentState.facilities.foodStalls.forEach(stall => {
-     // A baseline degradation analysis
      const ratio = stall.queueWaitTimeMin / 30; 
      let risk = ratio * 100;
 
      if(stall.queueWaitTimeMin > 18) {
-        addAlert({
+        allAlerts.push({
           id: `stall-${stall.id}`,
           level: 'warning',
           source: stall.name,
-          message: `${stall.name} flow indices are highly degraded.`,
-          reason: `Node processing time exceeds ${stall.queueWaitTimeMin} mins.`
-        });
-        addRec({
-          id: `rec-stall-${stall.id}`,
-          action: `Deploy peripheral mobile nodes`,
-          detail: `Vector tertiary mobile vending units towards the external radii of ${stall.name} to diffuse primary queue pressure.`,
-          confidenceScore: 88.5,
-          technicalReasoning: `Analysis of historical concession throughput suggests that wait times exceeding 18m result in exponential crowd tension coefficients. Injecting 2-3 mobile peripheral vendor nodes on the outer boundary is proven to diffuse static queue geometry by ~32% within 2 intervals.`
+          cause: `${stall.name} processing latency reaching ${Math.round(stall.queueWaitTimeMin)} mins`,
+          effect: `Aggressive radial queue expansion blocking pedestrian cross-flow.`,
+          recommendation: `Deploy 2 peripheral mobile vending units to external radii to diffuse localized queue pressure by 30%.`,
+          urgency: risk - 10 
         });
      }
      riskScores[stall.id] = parseFloat(Math.min(100, Math.max(0, risk)).toFixed(1));
   });
 
+  // Sort by urgency, cap at max 3, then format them.
+  allAlerts.sort((a, b) => b.urgency - a.urgency);
+  const criticalInsights = allAlerts.slice(0, 3).map(alert => ({
+    ...alert,
+    message: `${alert.cause} → ${alert.effect} → ${alert.recommendation}`
+  }));
+
   return {
-    alerts: Array.from(alertsMap.values()),
-    recommendations: Array.from(recsMap.values()),
+    alerts: criticalInsights,
     riskScores
   };
 };

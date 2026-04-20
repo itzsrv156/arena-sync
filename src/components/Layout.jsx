@@ -75,7 +75,7 @@ export default function Layout() {
       <motion.div 
         style={{ 
           flex: 1, 
-          marginLeft: isMobile ? 0 : 105,
+          marginLeft: isMobile ? 0 : 88,
           padding: isMobile ? '1rem 1rem 6rem 1rem' : '1rem 2rem 2rem 1rem', // Extra bot margin for mobile nav
           overflowX: 'hidden',
           display: 'flex',

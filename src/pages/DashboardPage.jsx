@@ -6,6 +6,7 @@ import { ComposedChart, Line, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, 
 import TemporalSlider from '../components/TemporalSlider';
 import SecurityFeed from '../components/SecurityFeed';
 import ArrivalsFunnel from '../components/ArrivalsFunnel';
+import CognitiveReasoningPanel from '../components/CognitiveReasoningPanel';
 
 const StatCard = ({ title, value, icon: Icon, color }) => (
   <motion.div
@@ -114,23 +115,9 @@ export default function DashboardPage() {
           {/* INGRESS FUNNEL REPLACING THE ROUTE FINDER */}
           <ArrivalsFunnel currentAttendance={activeAttendance} maxCapacity={maxBookingCapacity} />
 
-          <motion.div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ marginBottom: '1rem', fontSize: '1rem', color: 'var(--text-secondary)' }}>Live Concession Telemetry</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {stadiumData.facilities.foodStalls.map((stall, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
-                   <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{stall.name}</div>
-                   <div style={{ 
-                      fontSize: '0.85rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px',
-                      background: stall.queueWaitTimeMin * mtp > 18 ? 'rgba(239, 68, 68, 0.2)' : stall.queueWaitTimeMin * mtp > 8 ? 'rgba(250, 204, 21, 0.2)' : 'rgba(74, 222, 128, 0.1)',
-                      color: stall.queueWaitTimeMin * mtp > 18 ? 'var(--accent-red)' : stall.queueWaitTimeMin * mtp > 8 ? 'var(--accent-yellow)' : 'var(--accent-green)'
-                   }}>
-                      {Math.floor(stall.queueWaitTimeMin * mtp)} min wait
-                   </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+          <div style={{ minHeight: '350px' }}>
+             <CognitiveReasoningPanel aiAnalysis={aiAnalysis} />
+          </div>
           
           {/* SECURE BIOMETRIC FEED */}
           <SecurityFeed />

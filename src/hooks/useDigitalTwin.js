@@ -92,51 +92,74 @@ export const useDigitalTwin = (updateIntervalMs = 4000) => {
          setActiveEvent(null);
       }
 
-      // 🟢 GATES
+      // 🟢 GATES (Entry Point Pipeline)
+      let totalIngressThisTick = 0;
       draft.gates.forEach(gate => {
         let change = 0;
         switch (matchPhase) {
-          case "pre-match": change = 8; gate.flowDirection = "in"; break;
-          case "live": change = -12; break;
+          case "pre-match": change = 10; gate.flowDirection = "in"; break;
+          case "live": change = -15; break;
           case "break": change = -5; break;
-          case "post-match": change = 25; gate.flowDirection = "out"; break;
+          case "post-match": change = 30; gate.flowDirection = "out"; break;
         }
 
         change = change * flowMultiplier;
-        gate.currentLoadPerMinute = clamp(gate.currentLoadPerMinute + change, 0, gate.capacityPerMinute);
+        // Suppress gate if active routing overrides
+        
+        gate.currentLoadPerMinute = clamp(gate.currentLoadPerMinute + change, Math.random() * 5, gate.capacityPerMinute);
         gate.status = getGateStatus(gate.currentLoadPerMinute, gate.capacityPerMinute);
+        
+        if (gate.flowDirection === "in") {
+           totalIngressThisTick += gate.currentLoadPerMinute;
+        }
       });
 
-      // 🪑 STANDS
+      // 🪑 STANDS (Feed from Gates)
+      let totalStandOverflow = 0;
       draft.stands.forEach(stand => {
         let change = 0;
-        switch (matchPhase) {
-          case "pre-match": change = 180 * flowMultiplier; break;
-          case "live": change = 5; break;
-          case "break": change = -50; break;
-          case "post-match": change = -250 * flowMultiplier; break;
+        if (matchPhase === "pre-match") {
+           // Fans flow from Gates to Stands based on capacity chunking
+           change = (totalIngressThisTick * (stand.capacity / draft.overallCapacity)) * 2; 
+        } else if (matchPhase === "live") {
+           change = 2; // slow trickle
+        } else if (matchPhase === "break") {
+           change = -40; // People leave stands for food
+        } else if (matchPhase === "post-match") {
+           change = -200 * flowMultiplier; // Mass exit
         }
 
         change += eventStandSpike; // Apply active match event logic
 
         const localCap = Math.floor(stand.capacity * (currentMatch.bookingPercentage / 100));
         stand.occupancy = clamp(Math.round(stand.occupancy + change), 0, localCap);
+        
+        // If the stand is highly saturated, people get frustrated and bleed into concourse
+        if (stand.occupancy / localCap > 0.85 && matchPhase === "live") {
+           totalStandOverflow += 10;
+        }
+        
         newAttendance += stand.occupancy;
       });
 
       draft.currentAttendance = clamp(newAttendance, 0, totalExpectedAttendance);
 
-      // 🍔 FOOD STALLS
+      // 🍔 FOOD STALLS (Feed from Stand Overflow & Breaks)
       draft.facilities.foodStalls.forEach(stall => {
         let change = 0;
         switch (matchPhase) {
           case "pre-match": change = 1.5; break;
-          case "live": change = -2; break;
-          case "break": change = 5; break;
-          case "post-match": change = -3; break;
+          case "live": change = -2.5; break;
+          case "break": change = 8; break;
+          case "post-match": change = -5; break;
         }
 
-        if (envData.temperature > 28) change *= 1.5; 
+        // Apply causal physics from stand overflow
+        if (totalStandOverflow > 0) {
+           change += Math.round(totalStandOverflow / draft.facilities.foodStalls.length);
+        }
+
+        if (envData.temperature > 28) change *= 1.3; 
         change += eventFoodSpike;
 
         stall.queueWaitTimeMin = clamp(stall.queueWaitTimeMin + change, 0, 45);
@@ -148,9 +171,14 @@ export const useDigitalTwin = (updateIntervalMs = 4000) => {
         let change = 0;
         switch (matchPhase) {
           case "pre-match": change = 1; break;
-          case "live": change = -1; break;
-          case "break": change = 4; break;
-          case "post-match": change = -2; break;
+          case "live": change = -1.5; break;
+          case "break": change = 6; break;
+          case "post-match": change = -3; break;
+        }
+
+        // Apply causal physics from stand overflow
+        if (totalStandOverflow > 0) {
+           change += Math.round((totalStandOverflow / draft.facilities.washrooms.length) * 0.5);
         }
 
         change += eventWashroomSpike;
