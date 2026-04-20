@@ -1,54 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, ShieldAlert, ActivitySquare, AlertCircle } from 'lucide-react';
+import { Box, ShieldAlert, AlertTriangle, ArrowRight, Eye, ActivitySquare } from 'lucide-react';
 
-const getRiskColor = (risk) => {
-  if (risk > 85) return 'var(--accent-red)';
-  if (risk > 60) return 'var(--accent-yellow)';
-  return 'rgba(255,255,255,0.4)'; // Subdued green/clear for Apple style
+const getRiskParams = (risk) => {
+  if (risk > 85) return { color: 'var(--accent-red)', blur: 'var(--accent-red)', speed: 0.3, glow: '10px' };
+  if (risk > 60) return { color: 'var(--accent-yellow)', blur: 'var(--accent-yellow)', speed: 0.8, glow: '4px' };
+  return { color: 'rgba(56, 189, 248, 0.6)', blur: 'transparent', speed: 2.0, glow: '0px' }; 
 };
 
 export default function StadiumMap({ data, aiAnalysis, matchPhase }) {
   const [selected, setSelected] = useState(null);
+  const [hovered, setHovered] = useState(null);
   const [is3D, setIs3D] = useState(false);
+  const svgRef = useRef(null);
+
   const stands = data.stands;
   const gates = data.gates;
   const riskScores = aiAnalysis?.riskScores || {};
   const alerts = aiAnalysis?.alerts || [];
 
-  // Generate generic flow paths dynamically
   const generateFlowPath = (gate, index) => {
-    // Mapping 4 gates to center points
+    // 4 Outer gates pointing inwards through the inter-pavilion gaps
     const startPoints = [
-      { x: 250, y: 10 }, { x: 490, y: 250 }, { x: 250, y: 490 }, { x: 10, y: 250 }
+      { x: 250, y: -20 }, { x: 520, y: 250 }, { x: 250, y: 520 }, { x: -20, y: 250 }
     ];
-    // Map to stands
+    // Arc towards the inner concourse
     const endPoints = [
-      { x: 250, y: 100 }, { x: 400, y: 250 }, { x: 250, y: 400 }, { x: 100, y: 250 }
+      { x: 300, y: 80 }, { x: 420, y: 300 }, { x: 200, y: 420 }, { x: 80, y: 200 }
     ];
     
-    // Only animate if ingress is high
-    const isActive = gate.currentLoadPerMinute > 60;
+    const riskParams = getRiskParams(riskScores[gate.id] || 0);
+    const isActive = gate.currentLoadPerMinute > 10;
     
     return (
-      <motion.path
-        key={`flow-${gate.id}`}
-        d={`M ${startPoints[index%4].x} ${startPoints[index%4].y} Q ${250} ${250} ${endPoints[index%4].x} ${endPoints[index%4].y}`}
-        fill="transparent"
-        stroke={isActive ? 'rgba(56, 189, 248, 0.4)' : 'transparent'}
-        strokeWidth="2"
-        initial={{ pathLength: 0, opacity: 0 }}
-        animate={{ pathLength: isActive ? 1 : 0, opacity: isActive ? [0, 1, 0] : 0 }}
-        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-        style={{ pointerEvents: 'none' }}
-      />
+      <g key={`flow-${gate.id}`}>
+        <motion.path
+          d={`M ${startPoints[index%4].x} ${startPoints[index%4].y} Q 250 250 ${endPoints[index%4].x} ${endPoints[index%4].y}`}
+          fill="transparent"
+          stroke={isActive ? riskParams.color : 'rgba(255,255,255,0.05)'}
+          strokeWidth="3"
+          strokeDasharray="4 8"
+          initial={{ strokeDashoffset: 0 }}
+          animate={{ strokeDashoffset: isActive ? -12 : 0 }}
+          transition={{ duration: riskParams.speed, repeat: Infinity, ease: "linear" }}
+          style={{ pointerEvents: 'none', filter: `drop-shadow(0 0 5px ${riskParams.blur})` }}
+        />
+        {/* Origin Gate Node */}
+        <circle cx={startPoints[index%4].x} cy={startPoints[index%4].y} r="8" fill={isActive ? riskParams.color : 'rgba(255,255,255,0.1)'} stroke="#000" strokeWidth="2" filter="url(#vectorGlow)" />
+      </g>
     );
   };
 
   const getOverlayData = (node) => {
     const risk = riskScores[node.id] || 0;
-    const alert = alerts.find(a => a.id.includes(node.id));
-    return { risk, alert };
+    const alert = alerts.find(a => a.id === `stand-${node.id}` || a.id.includes(node.id));
+    return { risk, alert, params: getRiskParams(risk) };
   };
 
   return (
@@ -67,11 +73,12 @@ export default function StadiumMap({ data, aiAnalysis, matchPhase }) {
           }}
         >
            <Box size={16} />
-           <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{is3D ? '2D Projection' : '3D Topography'}</span>
+           <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{is3D ? '2D Tactical Matrix' : '3D Spatial Projection'}</span>
         </button>
       </div>
 
-      {/* SPATIAL VECTOR MAP */}
+      {/* Removed Floating Interactive Hover Tooltip based on feedback */}
+
       <motion.div 
         animate={{ 
            rotateX: is3D ? 55 : 0, 
@@ -81,49 +88,52 @@ export default function StadiumMap({ data, aiAnalysis, matchPhase }) {
         transition={{ type: "spring", stiffness: 100, damping: 20 }}
         style={{ position: 'relative', width: '500px', height: '500px', transformStyle: 'preserve-3d' }}
       >
-        {/* Core Geometry */}
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%', transform: `translate(-50%, -50%) ${is3D ? 'translateZ(-15px)' : ''}`,
-          width: '540px', height: '540px', borderRadius: '50%',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          background: 'radial-gradient(circle, rgba(255, 255, 255, 0.02) 80%, rgba(255, 255, 255, 0.05) 100%)',
-          boxShadow: '0 0 30px rgba(0,0,0,0.5)', zIndex: -2
-        }}></div>
-
-        <svg width="500" height="500" viewBox="0 0 500 500" style={{ overflow: 'visible', transform: is3D ? 'translateZ(20px)' : 'none', transition: '0.5s' }}>
+        <svg 
+           ref={svgRef}
+           onMouseLeave={() => setHovered(null)}
+           width="500" height="500" viewBox="0 0 500 500" 
+           style={{ overflow: 'visible', transform: is3D ? 'translateZ(20px)' : 'none', transition: '0.5s' }}
+        >
           <defs>
             <filter id="vectorGlow">
               <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
-              <feMerge>
-                <feMergeNode in="coloredBlur"/>
-                <feMergeNode in="SourceGraphic"/>
-              </feMerge>
+              <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
-            
-            <filter id="structuralShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx={is3D ? "25" : "0"} dy={is3D ? "25" : "15"} stdDeviation="15" floodColor="#000" floodOpacity="0.85"/>
+            <filter id="standShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx={is3D ? "25" : "5"} dy={is3D ? "25" : "5"} stdDeviation="15" floodColor="#000" floodOpacity="0.9"/>
             </filter>
           </defs>
+
+          {/* Central Pitch Background */}
+          <circle cx="250" cy="250" r="110" fill="#081c15" opacity="0.6" stroke="rgba(255,255,255,0.1)" />
+          {/* Subtle field grid lines */}
+          <g opacity="0.1">
+            <line x1="160" y1="250" x2="340" y2="250" stroke="#fff" strokeWidth="1" strokeDasharray="5 5" />
+            <line x1="250" y1="160" x2="250" y2="340" stroke="#fff" strokeWidth="1" strokeDasharray="5 5" />
+          </g>
 
           {/* Animated Flows */}
           {matchPhase !== 'break' && gates.map((g, i) => generateFlowPath(g, i))}
 
-          {/* Stands & Interactivity */}
+          {/* Architecture - Distant Distinct Pavilion Stands */}
           {stands.map((stand, i) => {
-            const { risk, alert } = getOverlayData(stand);
-            const isCritical = risk > 85;
+            const { risk, alert, params } = getOverlayData(stand);
+            const isSelected = selected?.id === stand.id;
+            const isHovering = hovered?.id === stand.id;
             
-            // Map stand zones identically to before but now interactive
-            const radius = 200;
-            const angleStart = (i * 90) * (Math.PI / 180);
-            const angleEnd = ((i + 1) * 90 - 5) * (Math.PI / 180);
+            const radius = 220;
+            const innerRadius = 140;
+            
+            // Generate exact 4-sided pavilions with gaps (70-degree chunks)
+            const chunkBaseAngle = (i * 90);
+            const angleStart = (chunkBaseAngle + 10) * (Math.PI / 180);
+            const angleEnd = (chunkBaseAngle + 80) * (Math.PI / 180);
+            
             const x1 = 250 + radius * Math.cos(angleStart);
             const y1 = 250 + radius * Math.sin(angleStart);
             const x2 = 250 + radius * Math.cos(angleEnd);
             const y2 = 250 + radius * Math.sin(angleEnd);
 
-            // Inner radius logic
-            const innerRadius = 110;
             const ix1 = 250 + innerRadius * Math.cos(angleStart);
             const iy1 = 250 + innerRadius * Math.sin(angleStart);
             const ix2 = 250 + innerRadius * Math.cos(angleEnd);
@@ -132,105 +142,196 @@ export default function StadiumMap({ data, aiAnalysis, matchPhase }) {
             const pathData = `M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2} L ${ix2} ${iy2} A ${innerRadius} ${innerRadius} 0 0 0 ${ix1} ${iy1} Z`;
 
             return (
-              <g key={stand.id} onClick={() => setSelected(stand)} style={{ cursor: 'pointer' }}>
+              <g 
+                key={stand.id} 
+                onClick={() => setSelected(stand)}
+                onMouseEnter={() => setHovered(stand)}
+                style={{ cursor: 'pointer' }}
+              >
+                {/* 3D Core Block Base */}
                 <path 
                    d={pathData} 
-                   fill="rgba(0,0,0,0.85)" 
-                   stroke="rgba(255,255,255,0.05)" 
-                   strokeWidth="1"
-                   filter="url(#structuralShadow)"
+                   fill="rgba(10, 15, 25, 0.95)" 
+                   stroke="rgba(255,255,255,0.08)" 
+                   strokeWidth="1.5"
+                   filter="url(#standShadow)"
                 />
                 
+                {/* Dynamic Glass Top Surface */}
                 <motion.path
                   d={pathData}
-                  fill={selected?.id === stand.id ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.03)'}
-                  stroke={getRiskColor(risk)}
-                  strokeWidth={selected?.id === stand.id ? 2 : 1}
+                  fill={isHovering || isSelected ? 'rgba(56, 189, 248, 0.08)' : 'rgba(255, 255, 255, 0.02)'}
+                  stroke={isSelected || isHovering || risk > 60 ? params.color : 'rgba(255,255,255,0.1)'}
+                  strokeWidth={isSelected || isHovering ? 3 : 1}
                   animate={{ 
-                     opacity: isCritical ? [0.6, 1, 0.6] : 1,
-                     filter: isCritical ? 'url(#vectorGlow)' : 'none'
+                     opacity: risk > 85 ? [0.8, 1, 0.8] : 1,
+                     filter: isSelected || risk > 85 ? 'url(#vectorGlow)' : 'none'
                   }}
-                  transition={{ duration: 1.5, repeat: isCritical ? Infinity : 0 }}
-                  whileHover={{ fill: 'rgba(255,255,255,0.08)' }}
-                  style={{ transform: is3D ? 'translateZ(10px)' : 'none', transition: '0.5s' }}
+                  transition={{ duration: 1.5, repeat: risk > 85 ? Infinity : 0 }}
+                  style={{ transform: is3D ? 'translateZ(15px)' : 'none', transition: '0.3s' }}
                 />
+
+                {/* Heatmap Depth Fill Gradient Override */}
+                {(risk > 60) && (
+                   <motion.path
+                      d={pathData}
+                      fill={params.color}
+                      opacity={0}
+                      animate={{ opacity: [0, 0.25, 0] }}
+                      transition={{ duration: params.speed * 4, repeat: Infinity }}
+                      style={{ transform: is3D ? 'translateZ(16px)' : 'none' }}
+                   />
+                )}
+                
+                {/* Stand Title Rendered on Turf */}
+                <text 
+                  x={(x1+ix2)/2} y={(y1+iy2)/2} 
+                  fill={isHovering || risk > 60 ? params.color : "rgba(255,255,255,0.4)"} 
+                  fontSize="12" fontWeight="800" textAnchor="middle" alignmentBaseline="middle"
+                  style={{ transform: is3D ? 'translateZ(30px)' : 'none', transition: '0.3s', pointerEvents: 'none' }}
+                >
+                  {stand.name.substring(0, 3).toUpperCase()}
+                </text>
                 
                 {alert && (
-                   <circle cx={(x1+ix2)/2} cy={(y1+iy2)/2} r="10" fill="var(--accent-red)" filter="url(#vectorGlow)">
-                      <animate attributeName="r" values="8;14;8" dur="1.5s" repeatCount="indefinite" />
-                   </circle>
+                   <motion.g 
+                     transform={`translate(${(x1+ix2)/2 + 25}, ${(y1+iy2)/2 - 12})`}
+                     style={{ pointerEvents: 'none' }}
+                   >
+                      <circle cx="0" cy="0" r="14" fill="rgba(0,0,0,0.8)" stroke="var(--accent-red)" strokeWidth="1.5" />
+                      <AlertTriangle size={14} color="var(--accent-red)" x="-7" y="-7" filter="url(#vectorGlow)" />
+                   </motion.g>
                 )}
               </g>
             );
           })}
         </svg>
+
       </motion.div>
 
-      {/* Floating Dynamic Analytics Panel */}
-      <div style={{ flex: 1, minWidth: '300px', height: '100%' }}>
+      {/* Right Side Control Interface (Detailed Zone AI Override) */}
+      <div style={{ flex: 1, minWidth: '340px', height: '100%', zIndex: 100 }}>
         <AnimatePresence mode="wait">
-          {selected ? (
+          {(hovered || selected) ? (() => {
+            const activeStand = hovered || selected;
+            return (
             <motion.div
-              key={selected.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
+              key={activeStand.id}
+              initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
               className="glass-panel"
               style={{
-                height: '100%', padding: '24px', display: 'flex', flexDirection: 'column', 
-                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.7), rgba(0,0,0,0.8))'
+                height: '100%', padding: '0', display: 'flex', flexDirection: 'column', 
+                background: 'rgba(10, 15, 25, 0.95)', border: `1px solid ${getOverlayData(activeStand).params.color}`,
+                boxShadow: `0 0 50px rgba(0,0,0,0.9), inset 0 0 30px ${getOverlayData(activeStand).params.color}20`,
+                overflow: 'hidden'
               }}
             >
-               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+               {/* Modal Header */}
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 24px 16px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'linear-gradient(to right, rgba(0,0,0,0.5), transparent)' }}>
                  <div>
-                   <h3 style={{ margin: 0, color: '#fff', fontSize: '1.4rem', fontWeight: 700 }}>{selected.name}</h3>
-                   <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Tactical Vector Block {selected.id}</span>
+                   <h3 style={{ margin: 0, color: '#fff', fontSize: '1.4rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>{activeStand.name}</h3>
+                   <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>ISOLATED SECTOR TELEMETRY</span>
                  </div>
-                 <button onClick={() => setSelected(null)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '50%', color: '#fff', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                 <button onClick={() => setSelected(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', color: '#fff', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '0.2s' }}>✕</button>
                </div>
                
-               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                  <div style={{ background: 'rgba(0,0,0,0.4)', padding: '16px', borderRadius: '12px', borderLeft: `3px solid ${getRiskColor((selected.occupancy/selected.capacity)*100)}` }}>
-                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>SATURATION</div>
-                     <div style={{ fontSize: '1.6rem', fontWeight: 600, color: getRiskColor((selected.occupancy/selected.capacity)*100) }}>
-                       {Math.round((selected.occupancy/selected.capacity)*100)}%
+               <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
+                  
+                  {/* Saturation Metrics */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                     <div style={{ background: 'rgba(0,0,0,0.6)', padding: '16px', borderRadius: '12px', borderLeft: `4px solid ${getOverlayData(activeStand).params.color}` }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', letterSpacing: '0.05em', fontWeight: 600 }}>CROWD SATURATION</div>
+                        <div style={{ fontSize: '2rem', fontWeight: 800, color: getOverlayData(activeStand).params.color }}>
+                          {Math.round((activeStand.occupancy/activeStand.capacity)*100)}%
+                        </div>
+                     </div>
+                     <div style={{ background: 'rgba(0,0,0,0.6)', padding: '16px', borderRadius: '12px', borderLeft: '4px solid var(--accent-blue)' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', letterSpacing: '0.05em', fontWeight: 600 }}>HEADCOUNT LOG</div>
+                        <div style={{ fontSize: '2rem', fontWeight: 600, color: '#fff', fontFamily: 'monospace' }}>{activeStand.occupancy.toLocaleString()}</div>
                      </div>
                   </div>
-                  <div style={{ background: 'rgba(0,0,0,0.4)', padding: '16px', borderRadius: '12px', borderLeft: '3px solid var(--accent-blue)' }}>
-                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>HARD COUNT</div>
-                     <div style={{ fontSize: '1.6rem', fontWeight: 600 }}>{selected.occupancy.toLocaleString()}</div>
-                  </div>
-               </div>
 
-               {alerts.find(a => a.id.includes(selected.id)) ? (
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(239, 68, 68, 0.1)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                    <div style={{ display: 'flex', gap: '8px', color: 'var(--accent-red)', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>
-                      <AlertCircle size={16} /> Automated AI Directive
+                  {/* AI Reasoning Module */}
+                  {getOverlayData(activeStand).alert ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'rgba(239, 68, 68, 0.15)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.4)', position: 'relative', overflow: 'hidden' }}>
+                       <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: 'var(--accent-red)' }}></div>
+                       
+                       <div style={{ display: 'flex', gap: '8px', color: 'var(--accent-red)', fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                         <ShieldAlert size={16} /> CRITICAL INSIGHT DIRECTIVE
+                       </div>
+
+                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
+                          <div style={{ display: 'flex', gap: '12px' }}>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 700, minWidth: '60px' }}>[CAUSE]</div>
+                            <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>{getOverlayData(activeStand).alert.cause}</div>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '12px' }}>
+                            <div style={{ color: 'var(--accent-yellow)', fontSize: '0.75rem', fontWeight: 700, minWidth: '60px' }}>[EFFECT]</div>
+                            <div style={{ color: 'var(--accent-yellow)', fontSize: '0.9rem', fontWeight: 500 }}>
+                               <ArrowRight size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle', marginTop: '-2px' }} />
+                               {getOverlayData(activeStand).alert.effect}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '12px', background: 'rgba(56, 189, 248, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.3)', marginTop: '8px' }}>
+                            <div style={{ color: 'var(--accent-blue)', fontSize: '0.75rem', fontWeight: 700, minWidth: '60px' }}>[REC]</div>
+                            <div style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 600, lineHeight: 1.5 }}>
+                               {getOverlayData(activeStand).alert.recommendation}
+                            </div>
+                          </div>
+                       </div>
                     </div>
-                    <div style={{ fontSize: '0.9rem', color: '#fff', lineHeight: 1.5 }}>
-                       {alerts.find(a => a.id.includes(selected.id)).recommendation}
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px', background: 'rgba(0,0,0,0.4)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                       <ActivitySquare size={32} color="var(--accent-green)" style={{ marginBottom: '16px', opacity: 0.8 }} />
+                       <span style={{ fontSize: '0.9rem', color: '#fff', fontWeight: 600 }}>System Nominal</span>
+                       <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '4px' }}>No active artificial intelligence causal anomalies tracking for this structure.</span>
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--accent-red)', marginTop: '8px' }}>
-                       Reasoning: {alerts.find(a => a.id.includes(selected.id)).effect}
-                    </div>
-                 </div>
-               ) : (
-                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', opacity: 0.5 }}>
-                    <ActivitySquare size={24} color="var(--accent-green)" />
-                    <span style={{ fontSize: '0.85rem' }}>No active intelligence directives for this sector.</span>
-                 </div>
-               )}
+                  )}
+
+               </div>
             </motion.div>
-          ) : (
+            );
+            })()
+            : (
             <motion.div
-              key="empty"
+              key="overview"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="glass-panel"
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '2rem', textAlign: 'center', opacity: 0.7 }}
+              style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '24px', background: 'rgba(10, 15, 25, 0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
             >
-               <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6 }}>
-                 Awaiting tactical telemetry stream.<br />Click an interactive stadium sector on the map<br />to isolate telemetry and AI intelligence.
-               </span>
+               <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Pavilion Overview</h3>
+               <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '24px', display: 'block' }}>Network Topography Hard Counts</span>
+               
+               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto', paddingRight: '8px' }}>
+                 {stands.map((stand) => {
+                    const { risk, params } = getOverlayData(stand);
+                    const saturation = (stand.occupancy/stand.capacity)*100;
+                    return (
+                      <div 
+                        key={`list-${stand.id}`} 
+                        onClick={() => setSelected(stand)}
+                        onMouseEnter={() => setHovered(stand)}
+                        onMouseLeave={() => setHovered(null)}
+                        style={{ cursor: 'pointer', padding: '16px', background: 'rgba(0,0,0,0.4)', borderRadius: '12px', borderLeft: `4px solid ${params.color}`, transition: '0.2s', transform: hovered?.id === stand.id ? 'translateX(5px)' : 'none' }}
+                      >
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <div style={{ fontWeight: 600, color: '#fff', fontSize: '1rem' }}>{stand.name}</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: params.color }}>{saturation.toFixed(0)}%</div>
+                         </div>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            <span>Hard Count: <strong style={{ color: '#fff' }}>{stand.occupancy.toLocaleString()}</strong></span>
+                            <span>Cap: {stand.capacity.toLocaleString()}</span>
+                         </div>
+                      </div>
+                    );
+                 })}
+               </div>
+               
+               <div style={{ marginTop: '16px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', textAlign: 'center', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Click any architectural sector on the map or list to isolate subsystem intelligence.</span>
+               </div>
             </motion.div>
           )}
         </AnimatePresence>
